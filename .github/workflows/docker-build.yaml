@@ -29,3 +29,5 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/cnm-notifier:commit-${{ github.sha }}
