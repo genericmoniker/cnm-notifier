@@ -17,7 +17,7 @@ class NetworkStatus:
     """The network status of a firewall."""
 
     firewall_sn: str
-    firewall_status: int
+    status: int
     network_name: str
 
 
@@ -60,12 +60,12 @@ def monitor(config, offline_callback, error_callback):
                     "Firewall %s at %s status: %s",
                     status.firewall_sn,
                     status.network_name,
-                    status.firewall_status,
+                    status.status,
                 )
-                if status.firewall_status != 3:  # TODO: What are the possible statuses?
+                if status.status != 3:  # TODO: What are the possible statuses?
                     offline_callback(config, status)
         except Exception as ex:
-            logger.error("Error monitoring CNM: %s", ex)
+            logger.error("Error monitoring CNM: %r %s", ex, ex)
             error_callback(config, ex)
 
         time.sleep(POLL_INTERVAL_SECONDS.total_seconds())
@@ -85,7 +85,7 @@ def _get_network_status(firewall_sn, session, username, password):
     response.raise_for_status()
     data = response.json()
     return NetworkStatus(
-        data["serialNumber"], data["firewallStatus"], data["networkName"]
+        data["serialNumber"], data["status"], data["networkName"]
     )
 
 
