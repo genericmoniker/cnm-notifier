@@ -1,35 +1,39 @@
 # cnm-notifier dockerfile
+# Based on the uv-docker-example project:
+# https://github.com/astral-sh/uv-docker-example/blob/main/Dockerfile
 
-FROM python:3.12-slim-bullseye
+# Use a Python image with uv pre-installed
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-RUN useradd --create-home appuser
-WORKDIR /home/appuser
+# Install the project into `/app`
+WORKDIR /app
 
-RUN export DEBIAN_FRONTEND=noninteractive && \
-  apt-get update && \
-  apt-get -y upgrade && \
-  apt-get install -y --no-install-recommends tini && \
-  apt-get -y clean && \
-  rm -rf /var/lib/apt/lists/*
+# Enable bytecode compilation
+ENV UV_COMPILE_BYTECODE=1
 
-USER appuser
+# Copy from the cache instead of linking since it's a mounted volume
+ENV UV_LINK_MODE=copy
 
-# Create a virtual environment.
-ENV VIRTUAL_ENV=/home/appuser/.venv
-RUN python -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+# Install the project's dependencies using the lockfile and settings
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project --no-dev
 
-# Install dependencies.
-COPY --chown=appuser requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Place executables in the environment at the front of the path
+ENV PATH="/app/.venv/bin:$PATH"
 
-# Install Chromium for Playwright.
-USER root
-RUN playwright install-deps chromium
-USER appuser
-RUN playwright install chromium
+# Install chromium for Playwright
+RUN playwright install-deps chromium && playwright install chromium
 
-COPY --chown=appuser . .
+# Then, add the rest of the project source code and install it
+# Installing separately from its dependencies allows optimal layer caching
+COPY . /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev
 
-ENTRYPOINT ["tini", "--", "python3", "main.py"]
-# To debug the container: ENTRYPOINT ["tail", "-f", "/dev/null"]
+# Reset the entrypoint, don't invoke `uv`
+ENTRYPOINT []
+
+# Run the application by default
+CMD ["uv", "run", "main.py"]

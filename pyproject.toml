@@ -1,0 +1,10 @@
+[project]
+name = "cnm-notifier"
+version = "0.1.0"
+description = "Notifier for the Church Network Manager"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "playwright>=1.52.0",
+    "requests>=2.32.3",
+]
