@@ -3,7 +3,6 @@ import logging
 import os
 from pathlib import Path
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -38,8 +37,10 @@ class Config:
         # CNM settings
         self.CNM_USERNAME = self._get("CNM_USERNAME")
         self.CNM_PASSWORD = self._get("CNM_PASSWORD")
-        firewalls = self._get("CNM_FIREWALLS").split(",")
-        self.CNM_FIREWALLS = [fw.strip() for fw in firewalls]
+        networks = self._get("CNM_NETWORKS")
+        self.CNM_NETWORKS = (
+            [nw.strip() for nw in networks.split(",")] if networks else []
+        )
 
     def _get(self, key):
         """Get a config value.

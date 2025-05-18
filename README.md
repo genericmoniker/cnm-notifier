@@ -16,4 +16,4 @@ compose secrets:
 - MAIL_RECIPIENTS - list of mail recipients, comma-separated
 - CNM_USERNAME - User name to log in to CNM
 - CNM_PASSWORD - Password to log in to CNM
-- CNM_FIREWALLS - list of firewall IDs, comma-separated
+- CNM_NETWORKS - list of network IDs, comma-separated

@@ -18,7 +18,7 @@ def main():
     conf = config.Config()
 
     try:
-        cnm.monitor(conf, notify.notify_offline, notify.notify_error)
+        cnm.monitor(conf, notify)
     except Exception as ex:
         logger.error(ex)
         return 1

@@ -1,91 +1,100 @@
+import logging
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
-import logging
-import time
-from playwright.sync_api import sync_playwright
+
 import requests
+from playwright.sync_api import sync_playwright
 
 CNM_URL = "https://cnm.churchofjesuschrist.org/"
 AUTH_URL = "https://id.churchofjesuschrist.org"
 FIREWALL_URL = "https://cnm.churchofjesuschrist.org/Networks/Meraki/firewall/api/{}"
+SSID_URL = "https://cnm.churchofjesuschrist.org/Networks/Meraki/ssid/api/{}"
 POLL_INTERVAL_SECONDS = timedelta(minutes=60)
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
 class NetworkStatus:
-    """The network status of a firewall."""
+    """Network status, including the status of a firewall and Lehi SSID expiry."""
 
-    firewall_sn: str
-    status: int
+    network_id: str
+    firewall_status: int
     network_name: str
-
-
-logger = logging.getLogger(__name__)
+    lehi_expiry_days: int | None = None
 
 
 class MonitorConfigError(Exception):
     """Raised when there is an error in the monitor configuration."""
 
 
-def monitor(config, offline_callback, error_callback):
-    """Monitor the network status of a firewall.
+def monitor(config, notify):
+    """Monitor the network status of a network.
 
     The monitor blocks indefinitely, polling the network status.
 
     Args:
         config: the configuration
-        offline_callback: A callback to call when the firewall is offline. The
-            callback should accept the configuration and the network status as
-            arguments.
-        error_callback: A callback to call when an error occurs. The callback should
-            accept the configuration and the error (exception) as an argument.
+        notify: the notification module with functions to call when
+            a network status should trigger a notification.
     """
     if not config.CNM_USERNAME or not config.CNM_PASSWORD:
         raise MonitorConfigError("CNM username or password not configured.")
 
-    if not config.CNM_FIREWALLS:
-        raise MonitorConfigError("No CNM firewalls configured.")
+    if not config.CNM_NETWORKS:
+        raise MonitorConfigError("No CNM networks configured.")
 
     logger.info("Monitoring Church Network Manager...")
 
     session = requests.Session()
     while True:
         try:
-            for firewall_sn in config.CNM_FIREWALLS:
+            for network_id in config.CNM_NETWORKS:
                 status = _get_network_status(
-                    firewall_sn, session, config.CNM_USERNAME, config.CNM_PASSWORD
+                    network_id, session, config.CNM_USERNAME, config.CNM_PASSWORD
                 )
-                logger.info(
-                    "Firewall %s at %s status: %s",
-                    status.firewall_sn,
-                    status.network_name,
-                    status.status,
-                )
-                if status.status != 3:  # TODO: What are the possible statuses?
-                    offline_callback(config, status)
+                logger.info(str(status))
+                notify.update_status(config, status)
         except Exception as ex:
             logger.error("Error monitoring CNM: %r %s", ex, ex)
-            error_callback(config, ex)
+            notify.error(config, ex)
 
         time.sleep(POLL_INTERVAL_SECONDS.total_seconds())
 
 
-def _get_network_status(firewall_sn, session, username, password):
-    """Check the network status of a firewall
+def _get_network_status(network_id, session, username, password):
+    """Get the status of a network
 
-    :param firewall_sn: the serial number of the firewall
-    :return: the network status of the firewall
+    :param network_id: ID/serial number of the network/firewall
+    :return: the network status of the network
     """
-    response = session.get(FIREWALL_URL.format(firewall_sn), allow_redirects=False)
+    # Get the firewall status.
+    response = session.get(FIREWALL_URL.format(network_id), allow_redirects=False)
     if response.status_code == 302 and AUTH_URL in response.headers["Location"]:
         logger.info("Logging in to CNM...")
         _login(session, username, password)
-        response = session.get(FIREWALL_URL.format(firewall_sn), allow_redirects=False)
+        response = session.get(FIREWALL_URL.format(network_id), allow_redirects=False)
     response.raise_for_status()
-    data = response.json()
+    data_fw = response.json()
+
+    # Get the Lehi SSID password expiry.
+    response = session.get(SSID_URL.format(network_id), allow_redirects=False)
+    response.raise_for_status()
+    data_ssid = response.json()
+    lehi_ssid = next((ssid for ssid in data_ssid if ssid["name"] == "Lehi"), None)
+    if lehi_ssid:
+        lehi_expiry_days = lehi_ssid["daysUntilExpire"]
+    else:
+        lehi_expiry_days = None
+        logger.warning("Lehi SSID not found for network %s", network_id)
+
     return NetworkStatus(
-        data["serialNumber"], data["status"], data["networkName"]
+        network_id=data_fw["serialNumber"],
+        network_name=data_fw["networkName"],
+        firewall_status=data_fw["status"],
+        lehi_expiry_days=lehi_expiry_days,
     )
 
 
