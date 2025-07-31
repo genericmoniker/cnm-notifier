@@ -63,7 +63,7 @@ def password_expiring(config, status):
     body += ({
         0: "has expired.",
         1: "will expire in 1 day.",
-    }.get(status.lehi_expiry_days, "will expire in {status.lehi_expiry_days} days."))
+    }.get(status.lehi_expiry_days, f"will expire in {status.lehi_expiry_days} days."))
     _send_mail(config, subject, body)
     logger.info("Sent password expiring notification: %s", subject)
 
