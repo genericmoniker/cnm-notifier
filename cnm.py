@@ -11,7 +11,8 @@ CNM_URL = "https://cnm.churchofjesuschrist.org/"
 AUTH_URL = "https://id.churchofjesuschrist.org"
 FIREWALL_URL = "https://cnm.churchofjesuschrist.org/Networks/Meraki/firewall/api/{}"
 SSID_URL = "https://cnm.churchofjesuschrist.org/Networks/Meraki/ssid/api/{}"
-POLL_INTERVAL_SECONDS = timedelta(minutes=60)
+NORMAL_POLL_INTERVAL = timedelta(minutes=60)
+OFFLINE_POLL_INTERVAL = timedelta(minutes=5)
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +47,11 @@ def monitor(config, notify):
     if not config.CNM_NETWORKS:
         raise MonitorConfigError("No CNM networks configured.")
 
-    logger.info("Monitoring Church Network Manager...")
+    logger.info("Starting to monitor Church Network Manager...")
 
     session = requests.Session()
     while True:
+        any_offline = False
         try:
             for network_id in config.CNM_NETWORKS:
                 status = _get_network_status(
@@ -57,11 +59,15 @@ def monitor(config, notify):
                 )
                 logger.info(str(status))
                 notify.update_status(config, status)
+                if status.firewall_status != notify.FIREWALL_STATUS_ONLINE:
+                    any_offline = True
         except Exception as ex:
             logger.error("Error monitoring CNM: %r %s", ex, ex)
             notify.error(config, ex)
 
-        time.sleep(POLL_INTERVAL_SECONDS.total_seconds())
+        # Poll more frequently if any network is offline to catch fixes sooner.
+        poll_interval = OFFLINE_POLL_INTERVAL if any_offline else NORMAL_POLL_INTERVAL
+        time.sleep(poll_interval.total_seconds())
 
 
 def _get_network_status(network_id, session, username, password):
@@ -105,13 +111,15 @@ def _login(session, username, password):
     :param password: the password
     """
     # This takes around 10 seconds to complete on my development machine...
+    # To debug, you can try running the browser in headless=False mode (see the
+    # playwright_browser context manager).
     with sync_playwright() as playwright:
         with playwright_browser(playwright) as browser:
             with playwright_context(browser) as context:
                 page = context.new_page()
                 page.goto(CNM_URL)
 
-                page.fill('input[name="identifier"]', username)
+                page.fill('input[id="username-input"]', username)
                 page.keyboard.press("Enter")
 
                 page.fill('input[type="password"]', password)

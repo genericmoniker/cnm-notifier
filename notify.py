@@ -18,6 +18,8 @@ def update_status(config, status):
     """Update the status of a network, sending a notification if needed."""
     last_status = _load_status(status.network_id)
     _save_status(status)
+
+    # If this is the first status update, don't send a notification.
     if not last_status:
         return
 
@@ -37,10 +39,16 @@ def update_status(config, status):
 def offline(config, status):
     """Notify that a firewall is offline."""
     subject = f"[CNM] ❌ {status.network_name} is offline"
-    body = (
-        f"The firewall {status.network_id} at {status.network_name} is offline "
-        f"({status.firewall_status})."
-    )
+    body = f"""
+        <html>
+        <body>
+        <p>The firewall {status.network_id} at {status.network_name} is <b>offline</b>
+        ({status.firewall_status}).</p>
+        <p>Another notification will be sent if the status changes.</p>
+        <p><a href="https://cnm.churchofjesuschrist.org">Church Network Manager</a></p>
+        </body>
+        </html>
+    """
     _send_mail(config, subject, body)
     logger.info("Sent offline notification: %s", subject)
 
@@ -48,10 +56,16 @@ def offline(config, status):
 def online(config, status):
     """Notify that a firewall is online after having been offline."""
     subject = f"[CNM] ✅ {status.network_name} is back online"
-    body = (
-        f"The firewall {status.network_id} at {status.network_name} is online "
-        f"({status.firewall_status})."
-    )
+    body = f"""
+        <html>
+        <body>
+        <p>The firewall {status.network_id} at {status.network_name} is <b>online</b>
+        ({status.firewall_status}).</p>
+        <p>Another notification will be sent if the status changes.</p>
+        <p><a href="https://cnm.churchofjesuschrist.org">Church Network Manager</a></p>
+        </body>
+        </html>
+    """
     _send_mail(config, subject, body)
     logger.info("Sent online notification: %s", subject)
 
@@ -59,11 +73,19 @@ def online(config, status):
 def password_expiring(config, status):
     """Notify that the Lehi SSID password is expiring soon/has expired."""
     subject = f"[CNM] ⚠ {status.network_name} Lehi SSID password expiring"
-    body = f"The Lehi SSID password for {status.network_id} at {status.network_name} "
-    body += ({
-        0: "has expired.",
+    msg = f"The Lehi SSID password for {status.network_id} at {status.network_name} "
+    msg += ({
+        0: "<b>has expired</b>.",
         1: "will expire in 1 day.",
     }.get(status.lehi_expiry_days, f"will expire in {status.lehi_expiry_days} days."))
+    body = f"""
+        <html>
+        <body>
+        <p>{msg}</p>
+        <p><a href="https://cnm.churchofjesuschrist.org">Church Network Manager</a></p>
+        </body>
+        </html>
+    """
     _send_mail(config, subject, body)
     logger.info("Sent password expiring notification: %s", subject)
 
@@ -71,7 +93,14 @@ def password_expiring(config, status):
 def error(config, ex):
     """Notify that an error occurred."""
     subject = "[CNM] Monitoring error"
-    body = f"An error occurred while monitoring CNM: {ex}"
+    body = f"""
+    <html>
+    <body>
+    <p>An error occurred while monitoring CNM: {ex}</p>
+    <p><a href="https://cnm.churchofjesuschrist.org">Church Network Manager</a></p>
+    </body>
+    </html>
+    """
     _send_mail(config, subject, body)
     logger.info("Sent error notification: %s", subject)
 

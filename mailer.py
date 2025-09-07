@@ -12,5 +12,6 @@ class Mailer:
         msg["To"] = recipients
         msg["From"] = sender
         msg["Subject"] = subject
-        msg.set_content(body)
+        subtype = "html" if "<html>" in body else "plain"
+        msg.set_content(body, subtype=subtype)
         self._smtp.send_message(msg)
