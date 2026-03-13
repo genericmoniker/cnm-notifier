@@ -62,7 +62,7 @@ def monitor(config, notify):
                 if status.firewall_status != notify.FIREWALL_STATUS_ONLINE:
                     any_offline = True
         except Exception as ex:
-            logger.error("Error monitoring CNM: %r %s", ex, ex)
+            logger.error("Error monitoring CNM: %s", ex)
             notify.error(config, ex)
 
         # Poll more frequently if any network is offline to catch fixes sooner.
@@ -82,12 +82,21 @@ def _get_network_status(network_id, session, username, password):
         logger.info("Logging in to CNM...")
         _login(session, username, password)
         response = session.get(FIREWALL_URL.format(network_id), allow_redirects=False)
-    response.raise_for_status()
+    if not response.ok:
+        raise requests.HTTPError(
+            f"Failed to get firewall status for network {network_id}: "
+            f"{response.status_code} {response.reason}: {response.text}"
+        )
+
     data_fw = response.json()
 
     # Get the Lehi SSID password expiry.
     response = session.get(SSID_URL.format(network_id), allow_redirects=False)
-    response.raise_for_status()
+    if not response.ok:
+        raise requests.HTTPError(
+            f"Failed to get SSID status for network {network_id}: "
+            f"{response.status_code} {response.reason}: {response.text}"
+        )
     data_ssid = response.json()
     lehi_ssid = next((ssid for ssid in data_ssid if ssid["name"] == "Lehi"), None)
     if lehi_ssid:
