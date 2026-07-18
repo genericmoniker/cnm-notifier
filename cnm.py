@@ -91,6 +91,8 @@ def _get_network_status(network_id, session, username, password):
     data_fw = response.json()
 
     # Get the Lehi SSID password expiry.
+    # It would be nice if the exact datetime of expiry was available, but the API only
+    # returns the number of days until expiry.
     response = session.get(SSID_URL.format(network_id), allow_redirects=False)
     if not response.ok:
         raise requests.HTTPError(
